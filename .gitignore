@@ -1,0 +1,74 @@
+# ========================
+# Maven
+# ========================
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# ========================
+# Spring Boot
+# ========================
+*.log
+logs/
+spring.log
+
+# ========================
+# IntelliJ IDEA
+# ========================
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ========================
+# Eclipse / STS
+# ========================
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+bin/
+
+# ========================
+# VS Code
+# ========================
+.vscode/
+
+# ========================
+# Secrets y configuración local
+# ========================
+# Nunca commitear claves RSA, passwords ni overrides locales
+*.pem
+*.key
+*.p12
+*.jks
+*.env
+.env
+.env.*
+application-local.yml
+application-local.properties
+config/application-local.yml
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Temporales
+# ========================
+*.tmp
+*.bak
+*.swp
+*~
