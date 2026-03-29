@@ -65,6 +65,54 @@ spring:
           filters:
             - name: JwtAuthFilter
 
+        # ── REALTIME WS-MS (NestJS :3001) — JWT required ─────────────────────
+        # Comment likes are handled by ws-ms (it publishes the Kafka event)
+        - id: realtime-ws-comments-like
+          uri: http://${REALTIME_WS_HOST:localhost}:${REALTIME_WS_PORT:3001}
+          predicates:
+            - Path=/api/v1/realtime/comments/*/like
+            - Method=POST,DELETE
+          filters:
+            - name: JwtAuthFilter
+            - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+
+        # WebSocket (Socket.IO) — JWT validated by gateway, x-user-id injected before forwarding
+        # iOS client MUST use forceWebsockets: true to skip HTTP polling (direct WS upgrade)
+        - id: realtime-ws-socketio
+          uri: http://${REALTIME_WS_HOST:localhost}:${REALTIME_WS_PORT:3001}
+          predicates:
+            - Path=/socket.io/**
+          filters:
+            - name: JwtAuthFilter
+
+        # Presence endpoints (Chat Estación screen + Amigos online badges)
+        - id: realtime-ws-presence
+          uri: http://${REALTIME_WS_HOST:localhost}:${REALTIME_WS_PORT:3001}
+          predicates:
+            - Path=/api/v1/realtime/presence/**
+          filters:
+            - name: JwtAuthFilter
+            - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+
+        # ── REALTIME API-MS (NestJS :3002) — JWT required ────────────────────
+        # Comments list + delete (CRUD persistence via MongoDB)
+        - id: realtime-api-comments
+          uri: http://${REALTIME_API_HOST:localhost}:${REALTIME_API_PORT:3002}
+          predicates:
+            - Path=/api/v1/realtime/comments/**
+          filters:
+            - name: JwtAuthFilter
+            - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+
+        # Notifications + badges
+        - id: realtime-api-notifications
+          uri: http://${REALTIME_API_HOST:localhost}:${REALTIME_API_PORT:3002}
+          predicates:
+            - Path=/api/v1/realtime/notifications/**
+          filters:
+            - name: JwtAuthFilter
+            - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+
       httpclient:
         connect-timeout: 5000
         response-timeout: 10s

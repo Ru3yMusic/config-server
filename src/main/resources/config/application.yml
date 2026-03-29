@@ -29,3 +29,10 @@ logging:
     com.rubymusic: INFO
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
+
+# ── Zero-trust M2M: shared RSA public key + internal secret ──────────────────
+jwt:
+  public-key: ${JWT_PUBLIC_KEY}
+
+internal:
+  service-secret: ${INTERNAL_SERVICE_SECRET:ruby-internal-secret-change-in-prod}
