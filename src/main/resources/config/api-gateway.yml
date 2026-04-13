@@ -8,6 +8,7 @@ spring:
       # presence tracking and badge counters. No separate Redis needed.
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
 
   cloud:
     gateway:
