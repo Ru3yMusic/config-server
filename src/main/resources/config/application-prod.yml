@@ -1,0 +1,11 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared config — PROD profile overrides
+# Loaded for ALL services when spring.profiles.active=prod.
+#
+# MANDATORY env vars:
+#   SERVICE_SECRET — strong random secret (≥32 chars) for M2M internal auth.
+#                    Must be identical across all services that verify it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+internal:
+  service-secret: ${SERVICE_SECRET}

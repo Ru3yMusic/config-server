@@ -51,3 +51,11 @@ management:
 logging:
   level:
     com.rubymusic.interaction: DEBUG
+
+# Zero-Trust JWT validation — RSA public key (Base64-encoded X.509/SPKI, no PEM headers)
+jwt:
+  public-key: ${JWT_PUBLIC_KEY:}
+
+# Service-to-service shared secret (used to obtain a service JWT from auth-service)
+internal:
+  service-secret: ${INTERNAL_SERVICE_SECRET:changeme}

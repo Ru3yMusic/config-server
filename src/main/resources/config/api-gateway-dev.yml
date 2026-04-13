@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# api-gateway — DEV profile overrides
+# Loaded when spring.profiles.active=dev (merged on top of api-gateway.yml).
+# ─────────────────────────────────────────────────────────────────────────────
+
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "http://localhost:3000,http://localhost:8080"
+
+gateway:
+  rate-limit:
+    replenish-rate: 100
+    burst-capacity: 200

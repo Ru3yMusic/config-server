@@ -40,6 +40,9 @@ management:
       exposure:
         include: health,info,metrics
 
+jwt:
+  public-key: ${JWT_PUBLIC_KEY:}
+
 logging:
   level:
     com.rubymusic.playlist: DEBUG

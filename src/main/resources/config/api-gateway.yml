@@ -2,6 +2,13 @@ server:
   port: 8080
 
 spring:
+  data:
+    redis:
+      # Same Redis instance used by realtime-ws-ms and realtime-api-ms for
+      # presence tracking and badge counters. No separate Redis needed.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   cloud:
     gateway:
       # Eureka-based service discovery for lb:// URIs
@@ -10,11 +17,17 @@ spring:
           enabled: true
           lower-case-service-id: true
 
-      # Global CORS — iOS client connects from any origin in dev
+      # Global CORS — values are environment-parameterized so dev can use wildcard
+      # while staging/prod restrict to known origins.
+      #
+      # Environment overrides (set in deployment/docker-compose per env):
+      #   CORS_ALLOWED_ORIGINS   — comma-separated list, e.g. https://app.rubymusic.io
+      #   CORS_ALLOW_CREDENTIALS — true only when allowedOrigins is NOT wildcard (*)
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: "*"
+            allowedOrigins:
+              - ${cors.allowed-origins:*}
             allowedMethods:
               - GET
               - POST
@@ -22,9 +35,26 @@ spring:
               - PATCH
               - DELETE
               - OPTIONS
-            allowedHeaders: "*"
+            allowedHeaders:
+              - ${cors.allowed-headers:*}
             exposedHeaders:
               - Authorization
+            allowCredentials: ${cors.allow-credentials:false}
+
+      # Default filters applied to ALL routes.
+      # RequestRateLimiter uses Redis to enforce per-user / per-IP limits.
+      # The userKeyResolver bean is defined in GatewayRateLimitConfig.
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            # Sustained throughput: tokens refilled per second
+            redis-rate-limiter.replenishRate: ${rate-limit.replenish-rate:10}
+            # Burst allowance: max tokens available at any instant
+            redis-rate-limiter.burstCapacity: ${rate-limit.burst-capacity:20}
+            # Each request costs 1 token
+            redis-rate-limiter.requestedTokens: 1
+            # SpEL reference to the GatewayRateLimitConfig#userKeyResolver bean
+            key-resolver: "#{@userKeyResolver}"
 
       routes:
         # ── AUTH SERVICE — no JWT required ───────────────────────────────────
@@ -32,6 +62,11 @@ spring:
           uri: lb://auth-service
           predicates:
             - Path=/api/v1/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: authServiceCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # ── CATALOG SERVICE — JWT required ───────────────────────────────────
         - id: catalog-service
@@ -40,6 +75,10 @@ spring:
             - Path=/api/v1/catalog/**
           filters:
             - name: JwtAuthFilter
+            - name: CircuitBreaker
+              args:
+                name: catalogServiceCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # ── INTERACTION SERVICE — JWT required ───────────────────────────────
         - id: interaction-service
@@ -48,6 +87,10 @@ spring:
             - Path=/api/v1/interactions/**
           filters:
             - name: JwtAuthFilter
+            - name: CircuitBreaker
+              args:
+                name: interactionServiceCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # ── PLAYLIST SERVICE — JWT required ──────────────────────────────────
         - id: playlist-service
@@ -56,6 +99,10 @@ spring:
             - Path=/api/v1/playlists/**
           filters:
             - name: JwtAuthFilter
+            - name: CircuitBreaker
+              args:
+                name: playlistServiceCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # ── SOCIAL SERVICE — JWT required ────────────────────────────────────
         - id: social-service
@@ -64,6 +111,10 @@ spring:
             - Path=/api/v1/social/**
           filters:
             - name: JwtAuthFilter
+            - name: CircuitBreaker
+              args:
+                name: socialServiceCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # ── REALTIME WS-MS (NestJS :3001) — JWT required ─────────────────────
         # Comment likes are handled by ws-ms (it publishes the Kafka event)
@@ -75,6 +126,10 @@ spring:
           filters:
             - name: JwtAuthFilter
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+            - name: CircuitBreaker
+              args:
+                name: realtimeWsCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # WebSocket (Socket.IO) — JWT validated by gateway, x-user-id injected before forwarding
         # iOS client MUST use forceWebsockets: true to skip HTTP polling (direct WS upgrade)
@@ -84,6 +139,10 @@ spring:
             - Path=/socket.io/**
           filters:
             - name: JwtAuthFilter
+            - name: CircuitBreaker
+              args:
+                name: realtimeWsSocketioCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # Presence endpoints (Chat Estación screen + Amigos online badges)
         - id: realtime-ws-presence
@@ -93,6 +152,10 @@ spring:
           filters:
             - name: JwtAuthFilter
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+            - name: CircuitBreaker
+              args:
+                name: realtimeWsPresenceCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # ── REALTIME API-MS (NestJS :3002) — JWT required ────────────────────
         # Comments list + delete (CRUD persistence via MongoDB)
@@ -103,6 +166,10 @@ spring:
           filters:
             - name: JwtAuthFilter
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+            - name: CircuitBreaker
+              args:
+                name: realtimeApiCommentsCircuitBreaker
+                fallbackUri: forward:/fallback
 
         # Notifications + badges
         - id: realtime-api-notifications
@@ -112,6 +179,10 @@ spring:
           filters:
             - name: JwtAuthFilter
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
+            - name: CircuitBreaker
+              args:
+                name: realtimeApiNotificationsCircuitBreaker
+                fallbackUri: forward:/fallback
 
       httpclient:
         connect-timeout: 5000
@@ -128,6 +199,27 @@ eureka:
 jwt:
   # Same RSA public key used by auth-service — only the public key is needed here.
   public-key: ${JWT_PUBLIC_KEY}
+
+# ── Resilience4j circuit breaker + time-limiter ──────────────────────────────
+# All circuit breakers inherit from the 'default' config unless overridden.
+# slidingWindowType: COUNT_BASED — trips after failureRateThreshold% failures
+#   in the last slidingWindowSize calls (minimumNumberOfCalls must be reached first).
+# waitDurationInOpenState: gateway stays OPEN (failing fast) for 10 s before
+#   transitioning to HALF-OPEN to probe the service.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
 
 management:
   endpoints:

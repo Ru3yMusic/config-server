@@ -52,3 +52,11 @@ management:
 logging:
   level:
     com.rubymusic.catalog: DEBUG
+
+# Zero-Trust: RSA public key for JWT validation (Base64-encoded X.509/SPKI format)
+jwt:
+  public-key: ${JWT_PUBLIC_KEY:}
+
+# Zero-Trust: service identity secret used to obtain service JWTs from auth-service
+internal:
+  service-secret: ${CATALOG_SERVICE_SECRET:catalog-dev-secret}

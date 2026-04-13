@@ -14,6 +14,17 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         default_batch_fetch_size: 20
+  # ── Kafka shared defaults ──────────────────────────────────────────────────
+  # Override KAFKA_BOOTSTRAP_SERVERS in each environment (docker-compose, k8s, etc.)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
 
 management:
   endpoints:
@@ -31,8 +42,16 @@ logging:
     org.hibernate.SQL: WARN
 
 # ── Zero-trust M2M: shared RSA public key + internal secret ──────────────────
+# MANDATORY: JWT_PUBLIC_KEY must be set to the RSA public key from auth-service
+# in ALL environments (dev, staging, prod). There is no safe default — if unset,
+# all JWT validation will fail at startup.
 jwt:
   public-key: ${JWT_PUBLIC_KEY}
 
+# MANDATORY: SERVICE_SECRET must be overridden with a strong random value in
+# staging and production. The dev default below is intentionally weak and must
+# NEVER be used outside local development.
 internal:
-  service-secret: ${INTERNAL_SERVICE_SECRET:ruby-internal-secret-change-in-prod}
+  service-secret: ${SERVICE_SECRET:dev-secret-change-in-prod}
+
+
