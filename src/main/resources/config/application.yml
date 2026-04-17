@@ -17,7 +17,17 @@ spring:
   # ── Kafka shared defaults ──────────────────────────────────────────────────
   # Override KAFKA_BOOTSTRAP_SERVERS in each environment (docker-compose, k8s, etc.)
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+    # ── Confluent Cloud (SASL_SSL) support ────────────────────────────────────
+    # LOCAL:  leave KAFKA_SECURITY_PROTOCOL unset (defaults to PLAINTEXT — no auth)
+    # PROD:   set KAFKA_SECURITY_PROTOCOL=SASL_SSL + CONFLUENT_API_KEY/SECRET
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:PLAIN}
+      sasl.jaas.config: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="${CONFLUENT_API_KEY:}"
+        password="${CONFLUENT_API_SECRET:}";
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
