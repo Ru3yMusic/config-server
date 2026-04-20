@@ -39,13 +39,21 @@ encrypt:
   key: ${ENCRYPT_KEY:changeme-dev-only}
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
   endpoints:
     web:
       exposure:
-        include: health,info,refresh,env
+        include: health,info,metrics,prometheus,refresh,env
   endpoint:
     health:
       show-details: always
+    prometheus:
+      enabled: true
 
 logging:
   level:

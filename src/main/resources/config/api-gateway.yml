@@ -223,15 +223,23 @@ resilience4j:
         timeoutDuration: 5s
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,metrics,prometheus,gateway
   endpoint:
     gateway:
       enabled: true
     health:
       show-details: always
+    prometheus:
+      enabled: true
 
 logging:
   level:
