@@ -32,20 +32,28 @@ eureka:
 # ── Config-server encryption ──────────────────────────────────────────────────
 # When ENCRYPT_KEY is set, config-server exposes /encrypt and /decrypt endpoints
 # and resolves {cipher}... values in any served YAML file at read time.
-# For development, the default 'changeme-dev-only' key is intentionally weak.
+# For developments, the default 'changeme-dev-only' key is intentionally weak.
 # MANDATORY: set a strong random key (≥32 chars) in staging and production via
 # the ENCRYPT_KEY environment variable.
 encrypt:
   key: ${ENCRYPT_KEY:changeme-dev-only}
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
   endpoints:
     web:
       exposure:
-        include: health,info,refresh,env
+        include: health,info,metrics,prometheus,refresh,env
   endpoint:
     health:
       show-details: always
+    prometheus:
+      enabled: true
 
 logging:
   level:
