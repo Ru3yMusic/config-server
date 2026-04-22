@@ -134,12 +134,16 @@ spring:
 
         # WebSocket (Socket.IO) — JWT validated by gateway, x-user-id injected before forwarding
         # iOS client MUST use forceWebsockets: true to skip HTTP polling (direct WS upgrade)
+        # NOTE: JwtAuthFilter NO se aplica aquí. El upgrade WebSocket del navegador
+        # no puede incluir el header Authorization (prohibido por la spec del browser)
+        # y Socket.IO envía el token en el handshake payload (auth.token), no en un
+        # header HTTP. La validación JWT del socket se hace en realtime-ws-ms
+        # (StationGateway.extractUserId) con la misma public key compartida.
         - id: realtime-ws-socketio
           uri: http://${REALTIME_WS_HOST:localhost}:${REALTIME_WS_PORT:3001}
           predicates:
             - Path=/socket.io/**
           filters:
-            - name: JwtAuthFilter
             - name: CircuitBreaker
               args:
                 name: realtimeWsSocketioCircuitBreaker
