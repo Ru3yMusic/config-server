@@ -49,7 +49,7 @@ jwt:
   #            export JWT_PUBLIC_KEY=$(grep  -v PUBLIC  public.pem | tr -d '\n')
   private-key: ${JWT_PRIVATE_KEY}
   public-key: ${JWT_PUBLIC_KEY}
-  access-token-expiration-ms: 900000      # 15 minutes
+  access-token-expiration-ms: 3600000     # 60 minutes
   refresh-token-expiration-days: 30
 
 springdoc:
