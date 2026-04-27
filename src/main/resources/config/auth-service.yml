@@ -39,7 +39,7 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    # Defaults vacíos para no romper startup en local sin SMTP configurado.
+    # Defaults vacíoss para no romper startup en local sin SMTP configurado.
     # Si no se setean, los envíos fallan en runtime (no al boot) — el flujo
     # de signup tira excepción al intentar enviar el OTP de verificación.
     username: ${MAIL_USERNAME:}
