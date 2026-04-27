@@ -1,15 +1,31 @@
 server:
   port: 8085
+  tomcat:
+    # Tuned for high-concurrency reads (friends list, pending requests, follows).
+    # 400 threads + accept-count 100 absorbs spikes without dropping connections;
+    # min-spare 50 keeps warm threads ready so first-hit latency stays low.
+    threads:
+      max: ${TOMCAT_THREADS_MAX:400}
+      min-spare: ${TOMCAT_THREADS_MIN_SPARE:50}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    connection-timeout: 20000
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/social_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
+      # Pool sized for the new Tomcat width: 50 conns supports ~400 threads
+      # since most requests are short reads. connection-timeout 5s fails fast
+      # vs blocking the request thread when the pool is exhausted.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:50}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
+      connection-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
 
   jpa:
     hibernate:
@@ -20,11 +36,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  # Kafka: bootstrap-servers + serializers vienen del shared application.yml.
+  # Acá solo seteamos los flags de durabilidad específicos del producer.
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 3
 
@@ -58,8 +73,10 @@ management:
       enabled: true
 
 jwt:
-  public-key: ${JWT_PUBLIC_KEY:}
+  # Sin default — fail-fast si la env no está seteada (consistente con los demás services).
+  public-key: ${JWT_PUBLIC_KEY}
 
 logging:
   level:
-    com.rubymusic.social: DEBUG
+    # Default INFO en prod. Override con LOG_LEVEL_SOCIAL=DEBUG en .env local.
+    com.rubymusic.social: ${LOG_LEVEL_SOCIAL:INFO}

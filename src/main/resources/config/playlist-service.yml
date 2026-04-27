@@ -1,15 +1,29 @@
 server:
   port: 8084
+  tomcat:
+    # /playlists/my hits on every /user/* navigation — must survive bursts to
+    # avoid being the new bottleneck after upstream services are widened.
+    threads:
+      max: ${TOMCAT_THREADS_MAX:400}
+      min-spare: ${TOMCAT_THREADS_MIN_SPARE:50}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    connection-timeout: 20000
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/playlist_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
+      # Pool sized for the new Tomcat width. connection-timeout 5s fails fast
+      # rather than holding the thread when the pool is exhausted.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:50}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
+      connection-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
 
   jpa:
     hibernate:
@@ -19,6 +33,15 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Kafka: bootstrap-servers + serializers vienen del shared application.yml.
+  # Acá los flags de durabilidad específicos del producer:
+  #   acks=all   → confirma escritura sólo cuando TODOS los replicas la tienen
+  #   retries=3  → reintenta errores transitorios automáticamente
+  kafka:
+    producer:
+      acks: all
+      retries: 3
 
 eureka:
   instance:
@@ -50,8 +73,9 @@ management:
       enabled: true
 
 jwt:
-  public-key: ${JWT_PUBLIC_KEY:}
+  public-key: ${JWT_PUBLIC_KEY}
 
 logging:
   level:
-    com.rubymusic.playlist: DEBUG
+    # Default INFO en prod. Override con LOG_LEVEL_PLAYLIST=DEBUG en .env local.
+    com.rubymusic.playlist: ${LOG_LEVEL_PLAYLIST:INFO}

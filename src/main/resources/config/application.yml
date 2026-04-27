@@ -58,10 +58,10 @@ logging:
 jwt:
   public-key: ${JWT_PUBLIC_KEY}
 
-# MANDATORY: SERVICE_SECRET must be overridden with a strong random value in
-# staging and production. The dev default below is intentionally weak and must
-# NEVER be used outside local development.
+# MANDATORY in prod: each client service MUST receive INTERNAL_SERVICE_SECRET
+# in its environment (passed via docker-compose.prod.yml). The dev default
+# below is intentionally weak and must NEVER be used outside local development.
 internal:
-  service-secret: ${SERVICE_SECRET:dev-secret-change-in-prod}
+  service-secret: ${INTERNAL_SERVICE_SECRET:ruby-secret-2026-service}
 
 

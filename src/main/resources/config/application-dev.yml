@@ -1,8 +1,0 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared config — DEV profile overrides
-# Loaded for ALL services when spring.profiles.active=dev.
-# Values here are intentionally weak — local development only.
-# ─────────────────────────────────────────────────────────────────────────────
-
-internal:
-  service-secret: dev-secret-not-for-production

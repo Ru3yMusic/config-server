@@ -18,17 +18,23 @@ spring:
           enabled: true
           lower-case-service-id: true
 
-      # Global CORS — values are environment-parameterized so dev can use wildcard
-      # while staging/prod restrict to known origins.
+      # Global CORS — env-var driven across all environments.
       #
-      # Environment overrides (set in deployment/docker-compose per env):
-      #   CORS_ALLOWED_ORIGINS   — comma-separated list, e.g. https://app.rubymusic.io
-      #   CORS_ALLOW_CREDENTIALS — true only when allowedOrigins is NOT wildcard (*)
+      # Local dev default:  http://localhost:4200 (Angular dev server)
+      # Prod override:      set CORS_ALLOWED_ORIGINS to the deployed frontend origin
+      #                     (e.g. http://159.112.140.232:4200 or https://app.rubymusic.io)
+      #
+      # CORS_ALLOW_CREDENTIALS: keep false unless the frontend uses cookies / basic auth.
+      # JWT in `Authorization: Bearer ...` does NOT require credentials.
+      #
+      # NOTE: For multiple origins from env var, comma-separated values are NOT split
+      # automatically here — extend with SpEL (#{...split(',')}) when a second origin
+      # is needed. Today there is only one prod origin, so single-value is enough.
       globalcors:
         cors-configurations:
           '[/**]':
             allowedOrigins:
-              - ${cors.allowed-origins:*}
+              - ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
             allowedMethods:
               - GET
               - POST
@@ -37,25 +43,11 @@ spring:
               - DELETE
               - OPTIONS
             allowedHeaders:
-              - ${cors.allowed-headers:*}
+              - ${CORS_ALLOWED_HEADERS:*}
             exposedHeaders:
               - Authorization
-            allowCredentials: ${cors.allow-credentials:false}
-
-      # Default filters applied to ALL routes.
-      # RequestRateLimiter uses Redis to enforce per-user / per-IP limits.
-      # The userKeyResolver bean is defined in GatewayRateLimitConfig.
-      default-filters:
-        - name: RequestRateLimiter
-          args:
-            # Sustained throughput: tokens refilled per second
-            redis-rate-limiter.replenishRate: ${rate-limit.replenish-rate:10}
-            # Burst allowance: max tokens available at any instant
-            redis-rate-limiter.burstCapacity: ${rate-limit.burst-capacity:20}
-            # Each request costs 1 token
-            redis-rate-limiter.requestedTokens: 1
-            # SpEL reference to the GatewayRateLimitConfig#userKeyResolver bean
-            key-resolver: "#{@userKeyResolver}"
+            allowCredentials: ${CORS_ALLOW_CREDENTIALS:false}
+            maxAge: 3600
 
       routes:
         # ── AUTH SERVICE — no JWT required ───────────────────────────────────
@@ -64,6 +56,12 @@ spring:
           predicates:
             - Path=/api/v1/auth/**
           filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - name: CircuitBreaker
               args:
                 name: authServiceCircuitBreaker
@@ -76,6 +74,12 @@ spring:
             - Path=/api/v1/catalog/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - name: CircuitBreaker
               args:
                 name: catalogServiceCircuitBreaker
@@ -88,6 +92,12 @@ spring:
             - Path=/api/v1/interactions/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - name: CircuitBreaker
               args:
                 name: interactionServiceCircuitBreaker
@@ -100,6 +110,12 @@ spring:
             - Path=/api/v1/playlists/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - name: CircuitBreaker
               args:
                 name: playlistServiceCircuitBreaker
@@ -112,6 +128,12 @@ spring:
             - Path=/api/v1/social/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - name: CircuitBreaker
               args:
                 name: socialServiceCircuitBreaker
@@ -126,6 +148,12 @@ spring:
             - Method=POST,DELETE
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
             - name: CircuitBreaker
               args:
@@ -156,6 +184,12 @@ spring:
             - Path=/api/v1/realtime/presence/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
             - name: CircuitBreaker
               args:
@@ -170,6 +204,12 @@ spring:
             - Path=/api/v1/realtime/comments/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
             - name: CircuitBreaker
               args:
@@ -183,6 +223,12 @@ spring:
             - Path=/api/v1/realtime/notifications/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:50}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:100}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - RewritePath=/api/v1/realtime/(?<segment>.*), /api/${segment}
             - name: CircuitBreaker
               args:
@@ -216,11 +262,11 @@ resilience4j:
     configs:
       default:
         slidingWindowType: COUNT_BASED
-        slidingWindowSize: 10
+        slidingWindowSize: 50
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
-        permittedNumberOfCallsInHalfOpenState: 3
-        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 20
   timelimiter:
     configs:
       default:

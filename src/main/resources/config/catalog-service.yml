@@ -1,15 +1,29 @@
 server:
   port: 8082
+  tomcat:
+    # Catalog is the hottest read path (home, search, library, station detail).
+    # 400 threads + accept-count 100 keeps the home from stalling under burst.
+    threads:
+      max: ${TOMCAT_THREADS_MAX:400}
+      min-spare: ${TOMCAT_THREADS_MIN_SPARE:50}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    connection-timeout: 20000
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/catalog_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
+      # Pool sized for the new Tomcat width. connection-timeout 5s fails fast
+      # rather than holding the thread when the pool is exhausted.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:50}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
+      connection-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
 
   jpa:
     hibernate:
@@ -21,13 +35,17 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_batch_fetch_size: 20
 
+  # Kafka: bootstrap-servers, serializers y auto-offset-reset vienen del shared
+  # application.yml. Acá seteamos lo per-service:
+  #   consumer.group-id  → identidad del consumer
+  #   producer.acks=all  → confirma sólo cuando TODOS los replicas tienen el mensaje
+  #   producer.retries=3 → reintenta errores transitorios automáticamente
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: catalog-service
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      acks: all
+      retries: 3
 
 eureka:
   instance:
@@ -60,12 +78,17 @@ management:
 
 logging:
   level:
-    com.rubymusic.catalog: DEBUG
+    # Default INFO en prod. Override con LOG_LEVEL_CATALOG=DEBUG en .env local.
+    com.rubymusic.catalog: ${LOG_LEVEL_CATALOG:INFO}
 
-# Zero-Trust: RSA public key for JWT validation (Base64-encoded X.509/SPKI format)
+# Zero-Trust: RSA public key for JWT validation (Base64-encoded X.509/SPKI format).
+# Heredamos el valor del shared application.yml — no hace falta redeclararlo,
+# pero lo dejamos explícito para que sea obvio en este servicio.
 jwt:
-  public-key: ${JWT_PUBLIC_KEY:}
+  public-key: ${JWT_PUBLIC_KEY}
 
-# Zero-Trust: service identity secret used to obtain service JWTs from auth-service
-internal:
-  service-secret: ${CATALOG_SERVICE_SECRET:catalog-dev-secret}
+# NOTA: catalog-service NO consume APIs de otros servicios — solo VALIDA JWTs
+# entrantes (rol USER o SERVICE) y EXPONE endpoints internos. Por eso no
+# declara `internal.service-secret` (no necesita pedirle un service token a
+# auth-service). Si en el futuro agregás un cliente, el secret viene heredado
+# del shared application.yml (${INTERNAL_SERVICE_SECRET}).

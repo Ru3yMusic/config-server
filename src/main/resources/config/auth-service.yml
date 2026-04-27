@@ -1,18 +1,31 @@
 server:
   port: 8081
+  tomcat:
+    # Tuned for login/register peaks plus internal token + user lookup traffic
+    # from social/interaction. 400 threads absorb burst, accept-count 100 holds
+    # the rest in queue instead of dropping at TCP level.
+    threads:
+      max: ${TOMCAT_THREADS_MAX:400}
+      min-spare: ${TOMCAT_THREADS_MIN_SPARE:50}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    connection-timeout: 20000
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/auth_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 30000
+      # PG is remote (latency-bound), so larger pool absorbs connection-acquire
+      # spikes during peak hours. connection-timeout 5s fails fast: a hung
+      # checkout used to hold the request thread for 30s, cascading freezes.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:50}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
+      connection-timeout: 5000
       idle-timeout: 600000
       max-lifetime: 1800000
+      leak-detection-threshold: 30000
 
   jpa:
     hibernate:
@@ -26,6 +39,9 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
+    # Defaults vacíos para no romper startup en local sin SMTP configurado.
+    # Si no se setean, los envíos fallan en runtime (no al boot) — el flujo
+    # de signup tira excepción al intentar enviar el OTP de verificación.
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
@@ -75,5 +91,7 @@ management:
 
 logging:
   level:
-    com.rubymusic.auth: DEBUG
+    # Default INFO en prod (DEBUG genera ruido y expone IDs/emails en logs).
+    # Para debugging local: setear LOG_LEVEL_AUTH=DEBUG en el .env del IDE.
+    com.rubymusic.auth: ${LOG_LEVEL_AUTH:INFO}
     org.springframework.security: WARN
